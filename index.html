@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panda 8 Counter</title>
+<style>
+body{
+  background:#0f172a;
+  color:#fff;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  margin:0;
+}
+.container{
+  max-width:430px;
+  margin:auto;
+  padding:14px;
+}
+h2{
+  text-align:center;
+  margin:8px 0 14px;
+}
+.card{
+  background:#1e293b;
+  border-radius:14px;
+  padding:12px;
+  margin-bottom:10px;
+}
+.stat{
+  font-size:18px;
+  margin:5px 0;
+}
+.big{
+  font-size:26px;
+  font-weight:700;
+}
+.green{color:#22c55e;}
+.red{color:#ef4444;}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+button{
+  padding:16px;
+  font-size:18px;
+  border:none;
+  border-radius:10px;
+  background:#334155;
+  color:#fff;
+}
+button:active{
+  transform:scale(0.97);
+}
+.wide{
+  grid-column:span 3;
+}
+.tools{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:10px;
+  margin-top:10px;
+}
+.log{
+  max-height:260px;
+  overflow:auto;
+  font-size:14px;
+  line-height:1.5;
+}
+.row{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  padding:6px 0;
+}
+.small{
+  font-size:14px;
+  color:#cbd5e1;
+  word-break:break-word;
+}
+.muted{
+  color:#94a3b8;
+}
+.input-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  align-items:center;
+}
+input{
+  width:100%;
+  box-sizing:border-box;
+  padding:12px;
+  font-size:18px;
+  border:none;
+  border-radius:10px;
+  background:#334155;
+  color:#fff;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h2>Panda 8 Counter</h2>
+
+<div class="card">
+  <div class="input-row">
+    <div class="stat">起始切牌數</div>
+    <input id="cutInput" type="number" min="0" max="416" value="14">
+  </div>
+  <div class="small muted">可自行設定一開始先切掉幾張牌</div>
+</div>
+
+<div class="card">
+  <div class="stat">RC: <span id="rc">0</span></div>
+  <div class="stat">TC: <span id="tc">0</span></div>
+  <div class="stat">起始切牌數: <span id="cutDisplay">14</span></div>
+  <div class="stat">已出牌: <span id="total">0</span></div>
+  <div class="stat">剩餘張數: <span id="remain">402</span></div>
+  <div class="stat">剩餘副數: <span id="deck">7.73</span></div>
+  <div class="stat big" id="bet">NO BET</div>
+  <div class="small muted">條件：TC ≥ 11 才下注 Panda 8</div>
+  <div class="small muted">每注：100｜賠率：25:1</div>
+</div>
+
+<div class="card">
+  <div class="stat">本手牌</div>
+  <div class="small" id="current">無</div>
+</div>
+
+<div class="grid">
+  <button data-card="1">A</button>
+  <button data-card="2">2</button>
+  <button data-card="3">3</button>
+  <button data-card="4">4</button>
+  <button data-card="5">5</button>
+  <button data-card="6">6</button>
+  <button data-card="7">7</button>
+  <button data-card="8">8</button>
+  <button data-card="9">9</button>
+  <button data-card="10" class="wide">10 / J / Q / K</button>
+</div>
+
+<div class="tools">
+  <button id="end">結束此手</button>
+  <button id="undo">復原</button>
+  <button id="reset">新一靴</button>
+</div>
+
+<div class="card">
+  <div class="stat">手牌紀錄</div>
+  <div class="log" id="log"></div>
+</div>
+
+</div>
+
+<script>
+let allCards = [];
+let currentHand = [];
+let logs = [];
+let initialCut = 14;
+
+function cardValue(c){
+  if(c === 1) return 1;
+  if(c === 2) return 1;
+  if(c === 3) return -2;
+  if(c === 4) return -2;
+  if(c === 5) return -2;
+  if(c === 6) return -1;
+  if(c === 7) return -1;
+  if(c === 8) return -2;
+  if(c === 9) return 4;
+  return 1;
+}
+
+function label(c){
+  return c === 1 ? "A" : String(c);
+}
+
+function getCutValue(){
+  let v = parseInt(document.getElementById("cutInput").value, 10);
+  if(isNaN(v) || v < 0) v = 0;
+  if(v > 416) v = 416;
+  return v;
+}
+
+function getRC(){
+  return allCards.reduce((a,b)=>a + cardValue(b), 0);
+}
+
+function getRemainCards(){
+  const remain = 416 - initialCut - allCards.length;
+  return remain < 0 ? 0 : remain;
+}
+
+function getRemainDecks(){
+  return getRemainCards() / 52;
+}
+
+function getTC(){
+  const decks = getRemainDecks();
+  if(decks <= 0) return 0;
+  return Math.floor(getRC() / decks);
+}
+
+function update(){
+  initialCut = getCutValue();
+
+  const rc = getRC();
+  const tc = getTC();
+  const remain = getRemainCards();
+  const decks = getRemainDecks();
+  const shouldBet = tc >= 11;
+
+  document.getElementById("rc").innerText = rc;
+  document.getElementById("tc").innerText = tc;
+  document.getElementById("cutDisplay").innerText = initialCut;
+  document.getElementById("total").innerText = allCards.length;
+  document.getElementById("remain").innerText = remain;
+  document.getElementById("deck").innerText = decks.toFixed(2);
+  document.getElementById("current").innerText =
+    currentHand.length ? currentHand.map(label).join(", ") : "無";
+
+  const betEl = document.getElementById("bet");
+  betEl.innerText = shouldBet ? "BET" : "NO BET";
+  betEl.className = shouldBet ? "stat big green" : "stat big red";
+}
+
+function renderLogs(){
+  if(logs.length === 0){
+    document.getElementById("log").innerHTML = '<div class="small">尚無紀錄</div>';
+    return;
+  }
+
+  document.getElementById("log").innerHTML = logs.map((x, i) => {
+    return `
+      <div class="row">
+        <div>
+          <div>#${i+1}　${x.cards}</div>
+          <div class="small">RC:${x.rc}｜TC:${x.tc}｜${x.bet ? "BET" : "NO BET"}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+document.getElementById("cutInput").addEventListener("input", update);
+
+document.querySelectorAll("[data-card]").forEach(btn => {
+  btn.onclick = () => {
+    if(getRemainCards() <= 0) return;
+    const c = Number(btn.dataset.card);
+    allCards.push(c);
+    currentHand.push(c);
+    update();
+  };
+});
+
+document.getElementById("undo").onclick = () => {
+  if(currentHand.length > 0){
+    currentHand.pop();
+    allCards.pop();
+    update();
+  }
+};
+
+document.getElementById("end").onclick = () => {
+  if(currentHand.length === 0) return;
+
+  const rc = getRC();
+  const tc = getTC();
+
+  logs.push({
+    cards: currentHand.map(label).join(", "),
+    rc,
+    tc,
+    bet: tc >= 11
+  });
+
+  currentHand = [];
+  renderLogs();
+  update();
+};
+
+document.getElementById("reset").onclick = () => {
+  allCards = [];
+  currentHand = [];
+  logs = [];
+  renderLogs();
+  update();
+};
+
+renderLogs();
+update();
+</script>
+
+</body>
+</html>
